@@ -16,9 +16,12 @@ struct RefrainApp: App {
         } else {
             music.start()
             lockScreen = LockScreenController(music: music)
-            // Asked at launch: a prompt raised on the lock screen would be hidden.
-            SystemAudioLevels.shared.requestPermission()
-            LoginItem.registerOnce()
+            // As a test host, a prompt would appear mid-run and a dismissal would deny the real app.
+            if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+                // Asked at launch: a prompt raised on the lock screen would be hidden.
+                SystemAudioLevels.shared.requestPermission()
+                LoginItem.registerOnce()
+            }
         }
     }
 

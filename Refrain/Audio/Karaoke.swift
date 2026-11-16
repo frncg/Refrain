@@ -34,8 +34,23 @@ final class Karaoke {
     func toggle(source: String?) {
         if isOn {
             stop()
-        } else if let source {
+            return
+        }
+        guard let source else { return }
+        switch SystemAudioPermission.status {
+        case .authorized:
             start(source: source)
+        case .unknown:
+            SystemAudioPermission.request { granted in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        if granted { self.start(source: source) }
+                    }
+                }
+            }
+        case .denied:
+            Logger().error("Karaoke needs System Audio Recording permission")
+            SystemAudioPermission.openSettings()
         }
     }
 

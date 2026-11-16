@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 /// The "System Audio Recording" permission, via private TCC calls: there's no public API for it.
 enum SystemAudioPermission {
@@ -22,5 +22,10 @@ enum SystemAudioPermission {
     static func request(_ completion: @escaping (Bool) -> Void) {
         guard let symbol = dlsym(handle, "TCCAccessRequest") else { return completion(false) }
         unsafeBitCast(symbol, to: Request.self)(service, nil, completion)
+    }
+
+    /// Privacy & Security > Screen & System Audio Recording, where a denial can be undone.
+    static func openSettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
     }
 }
