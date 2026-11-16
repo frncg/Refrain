@@ -61,6 +61,10 @@ enum NowPlayingSource {
         }
     }
 
+    static func isBrowser(_ bundleIdentifier: String?) -> Bool {
+        bundleIdentifier.map { browsers[$0] != nil } ?? false
+    }
+
     static func isMusicHost(_ url: URL?) -> Bool {
         guard let host = url?.host()?.lowercased() else { return false }
         return musicHosts.contains { host == $0 || host.hasSuffix("." + $0) }

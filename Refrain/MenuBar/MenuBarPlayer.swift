@@ -13,6 +13,8 @@ struct MenuBarPlayer: View {
     private static let lyricsVisibleKey = "menuBarLyricsVisible"
     /// Kept while the next track's lyrics load, so the window doesn't shrink and grow between tracks.
     @State private var trackHasLyrics = false
+    /// Refreshed when the menu opens or the source changes; each check is a round trip to tccd.
+    @State private var permissions = PermissionStatus()
 
     private static let animation = Animation.spring(duration: 0.35, bounce: 0.1)
 
@@ -49,7 +51,7 @@ struct MenuBarPlayer: View {
                     )
                 }
             } trailing: {
-                MoreMenu(music: music, size: 18)
+                MoreMenu(music: music, permissions: permissions, size: 18, onPermissionChange: refreshPermissions)
             }
 
             if lyricsVisible && trackHasLyrics {
@@ -67,6 +69,18 @@ struct MenuBarPlayer: View {
         }
         .onAppear { updateTrackHasLyrics(animated: false) }
         .onChange(of: music.lyrics) { updateTrackHasLyrics(animated: true) }
+        .onChange(of: isVisible) { _, visible in
+            if visible { refreshPermissions() }
+        }
+        .onChange(of: music.sourceName) { refreshPermissions() }
+    }
+
+    private func refreshPermissions() {
+        let source = music.bundleIdentifier
+        permissions = PermissionStatus(
+            audio: SystemAudioPermission.status,
+            automation: NowPlayingSource.isBrowser(source) ? source.flatMap { AutomationPermission.status(for: $0) } : nil
+        )
     }
 
     private func updateTrackHasLyrics(animated: Bool) {
@@ -81,13 +95,25 @@ struct MenuBarPlayer: View {
     }
 }
 
+private struct PermissionStatus {
+    var audio = SystemAudioPermission.Status.unknown
+    /// Only for browsers, the one kind of source Refrain controls over Apple Events.
+    var automation: AutomationPermission.Status?
+}
+
 private struct MoreMenu: View {
     let music: MusicController
+    let permissions: PermissionStatus
     let size: CGFloat
+    var onPermissionChange: () -> Void
 
     var body: some View {
         Menu {
             Text(sourceLabel)
+            audioPermission
+            if let automation = permissions.automation, let browser = music.sourceName {
+                automationPermission(automation, browser: browser)
+            }
             Divider()
             Button("Quit Refrain") {
                 NSApplication.shared.terminate(nil)
@@ -109,6 +135,34 @@ private struct MoreMenu: View {
     private var sourceLabel: String {
         guard let source = music.sourceName else { return "Nothing playing" }
         return music.isMusicSource ? "Playing from \(source)" : "\(source) isn't shown on the lock screen"
+    }
+
+    @ViewBuilder
+    private var audioPermission: some View {
+        switch permissions.audio {
+        case .authorized:
+            Text("System Audio Recording: Allowed")
+        case .denied:
+            Button("System Audio Recording: Off — Open Settings…", action: SystemAudioPermission.openSettings)
+        case .unknown:
+            Button("System Audio Recording: Not Asked — Allow…") {
+                SystemAudioPermission.request { _ in
+                    DispatchQueue.main.async(execute: onPermissionChange)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func automationPermission(_ status: AutomationPermission.Status, browser: String) -> some View {
+        switch status {
+        case .allowed:
+            Text("\(browser) Automation: Allowed")
+        case .denied:
+            Button("\(browser) Automation: Off — Open Settings…", action: AutomationPermission.openSettings)
+        case .notAsked:
+            Text("\(browser) Automation: Not Asked")
+        }
     }
 }
 
