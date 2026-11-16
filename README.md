@@ -1,72 +1,69 @@
-# MusicPlayer
+# Refrain
 
-A now-playing screen for the macOS lock screen. When your Mac locks while music is playing, MusicPlayer covers the lock screen with the track's artwork, a player and synced lyrics, and redraws the clock and login prompt around them.
+A now playing screen for the macOS lock screen, with synced lyrics and a menu bar player.
 
-It doesn't play audio itself. It shows and controls whatever is already playing system-wide: Apple Music, Spotify, a browser tab on a music site, and so on.
+Refrain doesn't play music itself. It shows and controls whatever is already playing on your Mac: Apple Music, Spotify, or a music site in your browser.
+
+![The lock screen while a song plays, with synced lyrics](docs/images/lock-screen.jpg)
 
 ## Features
 
-- **Lock screen player** with blurred artwork background, playback controls and a scrubbable progress bar.
-- **Synced lyrics** from [LRCLIB](https://lrclib.net). Tap a line to seek to it.
-- **Miniplayer** that collapses out of the way when you start typing your password, and expands again when you stop.
-- **Karaoke mode** that removes the vocals from the playing app, like Apple Music Sing.
-- **Audio-reactive visuals**: a live waveform in the miniplayer, and a background that pulses with the drums.
-- **Music only**: the lock screen player appears only for music apps and music websites, not for videos or podcasts in your browser.
+- **Lock screen player.** When your Mac locks while music is playing, the lock screen shows the song's artwork, playback controls and synced lyrics. The clock and login prompt are redrawn around it.
+- **Synced lyrics.** Lyrics follow the song line by line. Click a line to jump to it. Songs without lyrics get a bigger, centred player.
+- **Stays out of your way.** Start typing your password and the player shrinks to a small miniplayer so the password field shows.
+- **Karaoke.** Removes the vocals from the playing app, like Apple Music Sing.
+- **Reacts to the music.** A live waveform, and a background that pulses with the drums.
+- **Menu bar player.** A compact player in the menu bar, with lyrics that unfold below it.
+- **Music only.** It only takes over the lock screen for music apps and music websites, not videos or podcasts.
 
-Supported music apps: Apple Music, Spotify, Spotifast, TIDAL, Amazon Music, Deezer, YouTube Music Desktop, VOX, Doppler and Swinsian. In Safari and Chromium-based browsers, tabs on Apple Music, Spotify, YouTube Music, SoundCloud, TIDAL, Deezer, Amazon Music, Bandcamp, Pandora, Qobuz, Audiomack and Mixcloud count as music. Firefox isn't supported, because it can't report its tabs over AppleScript.
+When you start typing your password, the player steps aside into a miniplayer:
 
-## Requirements
+![The lock screen with the miniplayer, showing the wallpaper and login prompt](docs/images/lock-screen-miniplayer.jpg)
 
-- macOS 26 or later
-- Xcode 26 or later to build
+The menu bar player, with lyrics open:
 
-## Building
+![The menu bar player with lyrics open](docs/images/menu-bar.jpg)
 
-```sh
-git clone https://github.com/frncg/MusicPlayer.git
-cd MusicPlayer
-open MusicPlayer.xcodeproj
-```
+## Usage
 
-Then build and run the `MusicPlayer` scheme. Or from the command line:
+1. Build the app (see below), move `Refrain.app` to `/Applications` and open it.
+2. Allow **System Audio Recording** when asked. It's used for the waveform, the background pulse and karaoke. Audio is analysed live and never recorded.
+3. Play some music, then lock your Mac (Control-Command-Q).
 
-```sh
-xcodebuild -project MusicPlayer.xcodeproj -scheme MusicPlayer -destination 'platform=macOS' build
-```
+A music note appears in the menu bar. Click it for the player. To quit, click **⋯** and choose **Quit Refrain**.
 
-Out of the box the app is signed to run locally, which needs no Apple developer account. macOS ties permissions to the app's signature, though, so a locally signed build asks for them again after every rebuild. To sign with your own team instead, copy `Local.xcconfig.example` to `Local.xcconfig` and fill in your Team ID. `Local.xcconfig` is git-ignored.
+Refrain opens at login. You can turn that off in **System Settings > General > Login Items**.
 
-## Permissions
+For browser playback, macOS asks once per browser whether Refrain may control it. It only reads tab titles and addresses, to tell a music site from a video.
 
-| Permission | Why |
-| --- | --- |
-| **System Audio Recording** | Drives the waveform, the background pulse and karaoke mode. Audio is analysed live and never recorded or saved. Asked at launch, because a prompt raised on the lock screen would be hidden. |
-| **Automation** (per browser) | Lets MusicPlayer read your browser's tab titles and URLs to tell whether it's playing music. Without it, browser playback is treated as not music. |
+**Supported apps:** Apple Music, Spotify, Spotifast, Sonora, TIDAL, Amazon Music, Deezer, YouTube Music Desktop, VOX, Doppler and Swinsian. Also Safari and Chromium-based browsers (Chrome, Edge, Brave, Arc, Vivaldi) on Apple Music, Spotify, YouTube Music, SoundCloud, TIDAL, Deezer, Amazon Music, Bandcamp, Pandora, Qobuz, Audiomack and Mixcloud.
 
-## How it works, and caveats
+### Building
 
-MusicPlayer relies on **private macOS APIs**, so it can't be sandboxed or distributed through the Mac App Store, and a future macOS update could break it:
-
-- Now Playing information comes from the private MediaRemote framework, through [mediaremote-adapter](https://github.com/ejbills/mediaremote-adapter).
-- Drawing above the lock screen uses private SkyLight APIs, through [SkyLightWindow](https://github.com/Lakr233/SkyLightWindow).
-- The System Audio Recording permission is checked and requested through private TCC functions, since there's no public API for it.
-
-The overlay never draws a password field. It can't take keyboard focus, so everything you type goes straight to the real login window. MusicPlayer only notices *that* a key was pressed (to collapse into the miniplayer), never which key.
-
-See [`CLAUDE.md`](CLAUDE.md) for a detailed tour of the architecture.
-
-## Tests
+Requires macOS 26 and Xcode 26.
 
 ```sh
-xcodebuild -project MusicPlayer.xcodeproj -scheme MusicPlayer -destination 'platform=macOS' test -only-testing:MusicPlayerTests
+git clone https://github.com/frncg/Refrain.git
+cd Refrain
+xcodebuild -project Refrain.xcodeproj -scheme Refrain -destination 'platform=macOS' -configuration Release build
 ```
 
-## Acknowledgements
+Or open `Refrain.xcodeproj` and run the `Refrain` scheme.
 
-- [mediaremote-adapter](https://github.com/ejbills/mediaremote-adapter) by ejbills (BSD 3-Clause)
-- [SkyLightWindow](https://github.com/Lakr233/SkyLightWindow) by Lakr233 (MIT)
-- [LRCLIB](https://lrclib.net) for lyrics
+Builds are signed to run locally by default, so no developer account is needed. macOS asks for permissions again after each rebuild, though. To sign with your own team, copy `Local.xcconfig.example` to `Local.xcconfig` and add your Team ID.
+
+## How it works
+
+- **SwiftUI** for every screen. Each piece of the player (artwork, scrub bar, controls, lyrics) is shared between the lock screen and the menu bar.
+- **Now Playing** comes from Apple's private MediaRemote framework, through [mediaremote-adapter](https://github.com/ejbills/mediaremote-adapter).
+- **Drawing over the lock screen** uses private SkyLight APIs, through [SkyLightWindow](https://github.com/Lakr233/SkyLightWindow). macOS draws the wallpaper, clock and login prompt as one window, so nothing can sit between them. Refrain covers the whole lock screen and redraws the clock and prompt itself. It never draws a password field, and typing always goes to the real one.
+- **Lyrics** come from [LRCLIB](https://lrclib.net), cleaned of credit and ad lines.
+- **Audio levels** come from a Core Audio process tap of system output, analysed with an FFT (Accelerate). The background pulse follows whichever drum keeps the steadiest beat.
+- **Karaoke** taps the music app's audio and isolates the vocals with Apple's AUSoundIsolation audio unit, then subtracts them from the song.
+- **Browser detection** asks Safari or Chromium browsers for their open tabs over AppleScript.
+
+Because it relies on private APIs, Refrain can't be sandboxed or sold on the Mac App Store, and a macOS update could break it.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Uses [mediaremote-adapter](https://github.com/ejbills/mediaremote-adapter) (BSD 3-Clause) and [SkyLightWindow](https://github.com/Lakr233/SkyLightWindow) (MIT).
