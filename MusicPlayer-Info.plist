@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<!-- Merged into the generated Info.plist: there's no INFOPLIST_KEY_ build setting for it. -->
-	<key>NSAudioCaptureUsageDescription</key>
-	<string>MusicPlayer listens to what's playing to animate the waveform in the lock screen miniplayer. Nothing is recorded or saved.</string>
-</dict>
-</plist>

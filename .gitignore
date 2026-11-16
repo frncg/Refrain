@@ -20,3 +20,6 @@ DerivedData/
 
 # Local signing override (see Signing.xcconfig)
 Local.xcconfig
+
+# Local notes for Claude Code
+CLAUDE.md
