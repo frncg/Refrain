@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+
+# Build output
+build/
+DerivedData/
+*.xcresult
+
+# Coverage data
+*.profraw
+*.profdata
+
+# Swift Package Manager (Package.resolved under xcshareddata is committed)
+.build/
+.swiftpm/
+
+# Local signing override (see Signing.xcconfig)
+Local.xcconfig

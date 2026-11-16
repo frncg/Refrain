@@ -1,0 +1,14 @@
+// Code signing for every target (the project's base configuration).
+//
+// With no team, builds are signed to run locally (ad hoc). That works, but
+// macOS ties the System Audio Recording and Automation permissions to the
+// code signature, so an ad hoc build asks for them again after each rebuild.
+//
+// To sign with your own team, copy Local.xcconfig.example to Local.xcconfig
+// (git-ignored) and fill in your Team ID.
+
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM =
+CODE_SIGN_IDENTITY = -
+
+#include? "Local.xcconfig"
