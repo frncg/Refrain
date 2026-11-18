@@ -32,5 +32,13 @@ struct RefrainApp: App {
             Image(systemName: "music.note")
         }
         .menuBarExtraStyle(.window)
+
+        Window("Refrain", id: PlayerWindow.id) {
+            PlayerWindow(music: music)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1100, height: 680)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
     }
 }

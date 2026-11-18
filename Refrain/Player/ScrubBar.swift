@@ -49,7 +49,9 @@ struct ScrubBar: View {
                     startProgress = music.progress
                 }
                 guard let startProgress else { return }
-                scrub = min(max(startProgress + value.translation.width / max(width, 1), 0), 1)
+                let progress = min(max(startProgress + value.translation.width / max(width, 1), 0), 1)
+                scrub = progress
+                music.scrubTime = progress * music.duration
             }
             .onEnded { _ in
                 ignoringPress = false
@@ -58,6 +60,7 @@ struct ScrubBar: View {
                     music.seek(to: scrub * music.duration)
                 }
                 scrub = nil
+                music.scrubTime = nil
                 startProgress = nil
             }
     }

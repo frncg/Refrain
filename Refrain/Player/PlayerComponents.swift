@@ -12,10 +12,12 @@ struct ArtworkView: View {
     @Environment(\.playerTint) private var tint
 
     var body: some View {
-        ZStack {
+        // Color.clear sets the square; the overlay crops non-square artwork to it.
+        Color.clear.overlay {
             if let image {
                 Image(nsImage: image)
                     .resizable()
+                    .scaledToFill()
                     .id(ObjectIdentifier(image))
                     .transition(.opacity)
             } else {
@@ -34,6 +36,25 @@ struct ArtworkView: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
+    }
+}
+
+/// The artwork, or with `floating` an empty square that a window-wide artwork is matched to
+/// (`PlayerWindow`), so the artwork moves between layouts instead of crossfading.
+struct ArtworkSlot: View {
+    let image: NSImage?
+    let cornerRadius: CGFloat
+    var floating = false
+
+    var body: some View {
+        if floating {
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .contentShape(Rectangle())
+        } else {
+            ArtworkView(image: image, cornerRadius: cornerRadius)
+        }
     }
 }
 
@@ -135,23 +156,24 @@ struct CircleToggle: View {
     @Environment(\.playerTint) private var tint
 
     var body: some View {
+        // Animations scoped to the look, so the button still moves with the layout around it.
         Button(action: action) {
             ZStack {
                 Circle()
                     .fill(tint.opacity(0.25))
-                    .opacity(isOn ? 1 : 0)
+                    .animation(Self.animation) { $0.opacity(isOn ? 1 : 0) }
                 Image(systemName: systemName)
                     .font(.system(size: size * 0.6, weight: .medium))
-                    .foregroundStyle(tint.opacity(isOn ? 1 : 0.55))
+                    .animation(Self.animation) { $0.foregroundStyle(tint.opacity(isOn ? 1 : 0.55)) }
             }
             .frame(width: size * 1.2, height: size * 1.2)
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .opacity(isEnabled ? 1 : 0.35)
-        .animation(.easeOut(duration: 0.2), value: isOn)
-        .animation(.easeOut(duration: 0.2), value: isEnabled)
+        .animation(Self.animation) { $0.opacity(isEnabled ? 1 : 0.35) }
     }
+
+    private static let animation = Animation.easeOut(duration: 0.2)
 }
 
 /// Five bars of `SystemAudioLevels`, bass in the middle. Flat dots when paused.

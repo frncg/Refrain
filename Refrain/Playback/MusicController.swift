@@ -14,12 +14,17 @@ final class MusicController {
     private(set) var elapsed: TimeInterval = 0
     private(set) var artwork: NSImage? = nil
     private(set) var artworkColor: Color? = nil
+    private(set) var artworkLuminance: Artwork.Luminance? = nil
+    private(set) var artworkShade: Color? = nil
+    private(set) var artworkGlow: Color? = nil
     private(set) var isPlaying = false
     private(set) var lyrics: Lyrics = .idle
     /// Bumped whenever `lyrics` is replaced, so views can transition between lyrics of the same kind.
     private(set) var lyricsID = 0
     private(set) var sourceName: String? = nil
     private(set) var isMusicSource = false
+    /// Where a scrub bar is being dragged, so the lyrics follow it before the seek.
+    var scrubTime: TimeInterval?
 
     var progress: Double {
         duration > 0 ? min(elapsed / duration, 1) : 0
@@ -136,6 +141,9 @@ final class MusicController {
         currentArtwork = new
         artwork = new?.image
         artworkColor = new?.color
+        artworkLuminance = new?.luminance
+        artworkShade = new?.shade
+        artworkGlow = new?.glow
     }
 
     private func cacheLyrics(_ lyrics: Lyrics, for key: String) {
@@ -226,7 +234,8 @@ extension MusicController {
     static func preview(
         lyrics: Lyrics? = nil,
         elapsed: TimeInterval = 14,
-        isPlaying: Bool = true
+        isPlaying: Bool = true,
+        artwork: NSImage? = nil
     ) -> MusicController {
         let music = MusicController()
         music.title = "Neon Afterglow"
@@ -237,7 +246,7 @@ extension MusicController {
         music.isPlaying = isPlaying
         music.sourceName = "Music"
         music.isMusicSource = true
-        music.setArtwork(Artwork(image: previewArtwork))
+        music.setArtwork(Artwork(image: artwork ?? previewArtwork))
         music.lyrics = lyrics ?? .synced(LRCParser.parse("""
         [00:02.00] City lights are fading into blue
         [00:06.00] Every street I drive leads back to you

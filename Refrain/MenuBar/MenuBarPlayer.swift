@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A smaller miniplayer for the menu bar, on the menu's default background.
-/// Turning lyrics on extends the window down with a lyrics pane.
+/// Turning lyrics on opens a lyrics pane between the track and the progress bar, pushing the controls down.
 struct MenuBarPlayer: View {
     let music: MusicController
 
@@ -16,49 +16,18 @@ struct MenuBarPlayer: View {
     /// Refreshed when the menu opens or the source changes; each check is a round trip to tccd.
     @State private var permissions = PermissionStatus()
 
-    private static let animation = Animation.spring(duration: 0.35, bounce: 0.1)
+    private static let animation = Animation.spring(duration: 0.4, bounce: 0.1)
 
     var body: some View {
-        let elapsed = displayedElapsed(music, scrub: scrub)
         VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                ArtworkView(image: music.artwork, cornerRadius: 6)
-                    .frame(width: 42, height: 42)
-                TrackInfoView(music: music, titleFont: .subheadline.bold(), artistFont: .subheadline)
-                Spacer(minLength: 0)
-                if isVisible {
-                    PlaybackWaveform(isPlaying: music.isPlaying, barWidth: 2.5, maxHeight: 16)
-                }
-            }
-
-            HStack(spacing: 8) {
-                Text(formatTime(elapsed))
-                ScrubBar(music: music, scrub: $scrub, height: 5)
-                Text(remainingTime(music.duration, elapsed: elapsed))
-            }
-            .font(.caption2.monospacedDigit())
-            .foregroundStyle(.secondary)
-
-            ControlsView(music: music, size: 18) {
-                HStack(spacing: 4) {
-                    KaraokeToggle(music: music, size: 18)
-                    LyricsToggle(
-                        button: LyricsButton(isOn: lyricsVisible) {
-                            withAnimation(Self.animation) { lyricsVisible.toggle() }
-                        },
-                        hasLyrics: trackHasLyrics,
-                        size: 18
-                    )
-                }
-            } trailing: {
-                MoreMenu(music: music, permissions: permissions, size: 18, onPermissionChange: refreshPermissions)
-            }
-
+            header
             if lyricsVisible && trackHasLyrics {
                 LyricsColumn(music: music, style: .menuBar)
                     .frame(height: 260)
-                    .transition(.opacity)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
             }
+            progress
+            controls
         }
         .padding(16)
         .frame(width: 300)
@@ -75,6 +44,49 @@ struct MenuBarPlayer: View {
         .onChange(of: music.sourceName) { refreshPermissions() }
     }
 
+    private var header: some View {
+        HStack(spacing: 10) {
+            ArtworkView(image: music.artwork, cornerRadius: 6)
+                .frame(width: 42, height: 42)
+            TrackInfoView(music: music, titleFont: .subheadline.bold(), artistFont: .subheadline)
+            Spacer(minLength: 0)
+            if isVisible {
+                PlaybackWaveform(isPlaying: music.isPlaying, barWidth: 2.5, maxHeight: 16)
+            }
+        }
+    }
+
+    private var progress: some View {
+        let elapsed = displayedElapsed(music, scrub: scrub)
+        return HStack(spacing: 8) {
+            Text(formatTime(elapsed))
+            ScrubBar(music: music, scrub: $scrub, height: 5)
+            Text(remainingTime(music.duration, elapsed: elapsed))
+        }
+        .font(.caption2.monospacedDigit())
+        .foregroundStyle(.secondary)
+    }
+
+    private var controls: some View {
+        ControlsView(music: music, size: 18) {
+            HStack(spacing: 4) {
+                KaraokeToggle(music: music, size: 18)
+                LyricsToggle(
+                    button: LyricsButton(isOn: lyricsVisible) {
+                        withAnimation(Self.animation) { lyricsVisible.toggle() }
+                    },
+                    hasLyrics: music.lyrics.hasText,
+                    size: 18
+                )
+            }
+        } trailing: {
+            HStack(spacing: 4) {
+                PlayerWindowButton(size: 18)
+                MoreMenu(music: music, permissions: permissions, size: 18, onPermissionChange: refreshPermissions)
+            }
+        }
+    }
+
     private func refreshPermissions() {
         let source = music.bundleIdentifier
         permissions = PermissionStatus(
@@ -84,13 +96,7 @@ struct MenuBarPlayer: View {
     }
 
     private func updateTrackHasLyrics(animated: Bool) {
-        let hasLyrics: Bool
-        switch music.lyrics {
-        case .synced, .plain: hasLyrics = true
-        case .notFound, .failed, .instrumental: hasLyrics = false
-        case .idle, .loading: return
-        }
-        guard hasLyrics != trackHasLyrics else { return }
+        guard let hasLyrics = music.lyrics.availability, hasLyrics != trackHasLyrics else { return }
         withAnimation(animated ? Self.animation : nil) { trackHasLyrics = hasLyrics }
     }
 }
@@ -99,6 +105,27 @@ private struct PermissionStatus {
     var audio = SystemAudioPermission.Status.unknown
     /// Only for browsers, the one kind of source Refrain controls over Apple Events.
     var automation: AutomationPermission.Status?
+}
+
+private struct PlayerWindowButton: View {
+    let size: CGFloat
+
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button {
+            openWindow(id: PlayerWindow.id)
+            NSApp.activate()
+        } label: {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: size * 0.6, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: size * 1.2, height: size * 1.2)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help("Open Player Window")
+    }
 }
 
 private struct MoreMenu: View {

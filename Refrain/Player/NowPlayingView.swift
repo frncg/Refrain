@@ -6,46 +6,72 @@ struct NowPlayingView: View {
     let music: MusicController
     @Binding var expanded: Bool
     var transition = NowPlayingTransition()
+    var metrics = PlayerMetrics.lockScreen
+    /// Lets another layout (the player window's vertical one) morph to and from this one.
+    var sharedNamespace: Namespace.ID?
+    /// Leaves an empty slot for an artwork drawn above (`ArtworkSlot`).
+    var floatingArtwork = false
     var onExit: () -> Void
 
-    @Namespace private var namespace
+    @Namespace private var ownNamespace
+    private var namespace: Namespace.ID { sharedNamespace ?? ownNamespace }
     /// Not `@AppStorage`: toggling that didn't animate.
     @State private var lyricsVisible = UserDefaults.standard.object(forKey: Self.lyricsVisibleKey) as? Bool ?? true
-    private static let lyricsVisibleKey = "lockScreenLyricsVisible"
+    static let lyricsVisibleKey = "lockScreenLyricsVisible"
 
     /// Kept while the next track's lyrics load, so the layout doesn't jump.
     @State private var trackHasLyrics = true
+    /// Measured in `coordinateSpace`, to line the active lyric up with the artwork's centre.
+    @State private var artworkMidY: CGFloat?
+    @State private var lyricsFrame: CGRect?
+    fileprivate static let coordinateSpace = "nowPlaying"
+
+    private var lyricsFocus: CGFloat? {
+        guard let artworkMidY, let lyricsFrame, lyricsFrame.height > 0 else { return nil }
+        return min(max((artworkMidY - lyricsFrame.minY) / lyricsFrame.height, 0.1), 0.9)
+    }
 
     private var showsBigArtwork: Bool {
-        lyricsVisible && !trackHasLyrics
+        lyricsVisible ? !trackHasLyrics : metrics.bigWhenLyricsHidden
     }
 
     var body: some View {
         ZStack {
             if expanded {
-                HStack(spacing: 48) {
+                HStack(spacing: metrics.spacing) {
                     PlayerColumn(
                         music: music,
                         namespace: namespace,
+                        floatingArtwork: floatingArtwork,
                         lyricsButton: LyricsButton(isOn: lyricsVisible) {
                             withAnimation(transition.animation) { lyricsVisible.toggle() }
                         },
-                        onCollapse: { setExpanded(false) }
+                        artworkMaxWidth: showsBigArtwork ? metrics.bigArtworkWidth : metrics.artworkWidth,
+                        onCollapse: { setExpanded(false) },
+                        onArtworkMidY: { artworkMidY = $0 }
                     )
-                    .frame(width: showsBigArtwork ? 391 : 322)
+                    .frame(width: showsBigArtwork ? metrics.bigColumnWidth : metrics.columnWidth)
                     if lyricsVisible && !showsBigArtwork {
-                        LyricsColumn(music: music)
+                        LyricsColumn(music: music, style: metrics.lyricsStyle, focus: lyricsFocus)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .matchedGeometryEffect(id: PlayerMatched.lyrics, in: namespace)
+                            .onGeometryChange(for: CGRect.self) { proxy in
+                                proxy.frame(in: .named(Self.coordinateSpace))
+                            } action: { frame in
+                                lyricsFrame = frame
+                            }
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, 32)
-                .padding(.vertical, showsBigArtwork ? 0 : 32)
+                .coordinateSpace(.named(Self.coordinateSpace))
+                .padding(.horizontal, metrics.horizontalPadding)
+                .padding(.vertical, showsBigArtwork ? metrics.bigVerticalPadding : metrics.verticalPadding)
             } else {
                 MiniPlayer(
                     music: music,
                     namespace: namespace,
+                    floatingArtwork: floatingArtwork,
                     lyricsButton: LyricsButton(isOn: false) {
                         withAnimation(transition.animation) {
                             lyricsVisible = true
@@ -69,13 +95,7 @@ struct NowPlayingView: View {
     }
 
     private func updateTrackHasLyrics(animated: Bool) {
-        let hasLyrics: Bool
-        switch music.lyrics {
-        case .synced, .plain: hasLyrics = true
-        case .notFound, .failed, .instrumental: hasLyrics = false
-        case .idle, .loading: return
-        }
-        guard hasLyrics != trackHasLyrics else { return }
+        guard let hasLyrics = music.lyrics.availability, hasLyrics != trackHasLyrics else { return }
         withAnimation(animated ? transition.animation : nil) { trackHasLyrics = hasLyrics }
     }
 
@@ -84,6 +104,27 @@ struct NowPlayingView: View {
             expanded = value
         }
     }
+}
+
+/// Sizes of the full player. The lock screen's were measured on a 1800×1169pt display;
+/// the player window computes its own (`PlayerWindow.metrics(for:)`).
+struct PlayerMetrics {
+    var columnWidth: CGFloat = 322
+    /// Narrower than the column when the height is short; nil fills the column.
+    var artworkWidth: CGFloat?
+    /// For a track without lyrics, centred with bigger artwork.
+    var bigColumnWidth: CGFloat = 391
+    var bigArtworkWidth: CGFloat?
+    var spacing: CGFloat = 48
+    var horizontalPadding: CGFloat = 32
+    var verticalPadding: CGFloat = 32
+    /// None on the lock screen, so the bigger artwork can reach its width in the band's height.
+    var bigVerticalPadding: CGFloat = 0
+    /// Whether turning lyrics off also gives the bigger artwork, rather than just centring the column.
+    var bigWhenLyricsHidden = false
+    var lyricsStyle = LyricsStyle.lockScreen
+
+    static let lockScreen = PlayerMetrics()
 }
 
 /// Tune it in the "Transition" preview.
@@ -97,23 +138,34 @@ struct NowPlayingTransition {
     }
 }
 
-private enum Matched: Hashable {
-    case artwork, info, progress, controls, current, duration
+/// Views that `matchedGeometryEffect` moves between the player layouts.
+enum PlayerMatched: Hashable {
+    case artwork, info, progress, controls, current, duration, lyrics
 }
 
 private struct PlayerColumn: View {
     let music: MusicController
     let namespace: Namespace.ID
+    let floatingArtwork: Bool
     let lyricsButton: LyricsButton
+    var artworkMaxWidth: CGFloat?
     var onCollapse: () -> Void
+    var onArtworkMidY: (CGFloat) -> Void
 
     @State private var scrub: Double?
 
     var body: some View {
         let elapsed = displayedElapsed(music, scrub: scrub)
         VStack(alignment: .leading, spacing: 14) {
-            ArtworkView(image: music.artwork, cornerRadius: 12)
-                .matchedGeometryEffect(id: Matched.artwork, in: namespace)
+            ArtworkSlot(image: music.artwork, cornerRadius: 12, floating: floatingArtwork)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.frame(in: .named(NowPlayingView.coordinateSpace)).midY
+                } action: { midY in
+                    onArtworkMidY(midY)
+                }
+                .matchedGeometryEffect(id: PlayerMatched.artwork, in: namespace)
+                .frame(maxWidth: artworkMaxWidth ?? .infinity)
+                // Centred over the controls when it's narrower than them.
                 .frame(maxWidth: .infinity)
                 .shadow(color: .black.opacity(0.4), radius: 20, y: 8)
                 .scaleEffect(music.isPlaying ? 1 : 0.85)
@@ -122,17 +174,17 @@ private struct PlayerColumn: View {
                 .onTapGesture(perform: onCollapse)
 
             TrackInfoView(music: music, titleFont: .title3.bold())
-                .matchedGeometryEffect(id: Matched.info, in: namespace, properties: .position)
+                .matchedGeometryEffect(id: PlayerMatched.info, in: namespace, properties: .position)
 
             VStack(spacing: 0) {
                 ScrubBar(music: music, scrub: $scrub)
-                    .matchedGeometryEffect(id: Matched.progress, in: namespace)
+                    .matchedGeometryEffect(id: PlayerMatched.progress, in: namespace)
                 HStack {
                     Text(formatTime(elapsed))
-                        .matchedGeometryEffect(id: Matched.current, in: namespace)
+                        .matchedGeometryEffect(id: PlayerMatched.current, in: namespace)
                     Spacer()
                     Text(remainingTime(music.duration, elapsed: elapsed))
-                        .matchedGeometryEffect(id: Matched.duration, in: namespace)
+                        .matchedGeometryEffect(id: PlayerMatched.duration, in: namespace)
                 }
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.white.opacity(0.6))
@@ -143,7 +195,7 @@ private struct PlayerColumn: View {
             } trailing: {
                 LyricsToggle(button: lyricsButton, hasLyrics: music.lyrics.hasText, size: 26)
             }
-                .matchedGeometryEffect(id: Matched.controls, in: namespace, properties: .position)
+                .matchedGeometryEffect(id: PlayerMatched.controls, in: namespace, properties: .position)
         }
     }
 }
@@ -151,6 +203,7 @@ private struct PlayerColumn: View {
 private struct MiniPlayer: View {
     let music: MusicController
     let namespace: Namespace.ID
+    let floatingArtwork: Bool
     let lyricsButton: LyricsButton
     var onExpand: () -> Void
     var onExit: () -> Void
@@ -162,8 +215,8 @@ private struct MiniPlayer: View {
         let elapsed = displayedElapsed(music, scrub: scrub)
         VStack(spacing: 14) {
             HStack(spacing: 14) {
-                ArtworkView(image: music.artwork, cornerRadius: 8)
-                    .matchedGeometryEffect(id: Matched.artwork, in: namespace)
+                ArtworkSlot(image: music.artwork, cornerRadius: 8, floating: floatingArtwork)
+                    .matchedGeometryEffect(id: PlayerMatched.artwork, in: namespace)
                     .frame(width: 56, height: 56)
                     .scaleEffect(pressingArtwork ? 0.85 : 1)
                     .animation(.spring(duration: 0.3), value: pressingArtwork)
@@ -171,7 +224,7 @@ private struct MiniPlayer: View {
                         pressingArtwork = pressing
                     }
                 TrackInfoView(music: music, titleFont: .headline)
-                    .matchedGeometryEffect(id: Matched.info, in: namespace, properties: .position)
+                    .matchedGeometryEffect(id: PlayerMatched.info, in: namespace, properties: .position)
                 Spacer(minLength: 0)
                 PlaybackWaveform(isPlaying: music.isPlaying)
             }
@@ -180,11 +233,11 @@ private struct MiniPlayer: View {
 
             HStack(spacing: 10) {
                 Text(formatTime(elapsed))
-                    .matchedGeometryEffect(id: Matched.current, in: namespace)
+                    .matchedGeometryEffect(id: PlayerMatched.current, in: namespace)
                 ScrubBar(music: music, scrub: $scrub)
-                    .matchedGeometryEffect(id: Matched.progress, in: namespace)
+                    .matchedGeometryEffect(id: PlayerMatched.progress, in: namespace)
                 Text(remainingTime(music.duration, elapsed: elapsed))
-                    .matchedGeometryEffect(id: Matched.duration, in: namespace)
+                    .matchedGeometryEffect(id: PlayerMatched.duration, in: namespace)
             }
             .font(.caption.monospacedDigit())
             .foregroundStyle(.white.opacity(0.6))
@@ -194,7 +247,7 @@ private struct MiniPlayer: View {
             } trailing: {
                 LyricsToggle(button: lyricsButton, hasLyrics: music.lyrics.hasText, size: 28)
             }
-                .matchedGeometryEffect(id: Matched.controls, in: namespace, properties: .position)
+                .matchedGeometryEffect(id: PlayerMatched.controls, in: namespace, properties: .position)
         }
         .padding(18)
         .frame(width: 440)

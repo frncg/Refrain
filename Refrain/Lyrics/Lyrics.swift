@@ -21,6 +21,15 @@ enum Lyrics: Equatable {
         default: false
         }
     }
+
+    /// Whether the track has lyrics to show, or nil while that isn't known yet.
+    var availability: Bool? {
+        switch self {
+        case .synced, .plain: true
+        case .notFound, .failed, .instrumental: false
+        case .idle, .loading: nil
+        }
+    }
 }
 
 enum LRCParser {
